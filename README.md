@@ -1,190 +1,244 @@
 # ShopStack
 
-A polyglot microservice stack for learning DevOps by doing — not by reading about it.
+A 3-tier polyglot containerised application for learning DevOps by doing — not by reading about it.
 
-**What it is:** A working e-commerce store (DevOps books, courses, and gear) built across three services in different languages, wired together with Docker Compose, observable with structured JSON logs, and designed to be broken and fixed.
+**What it is:** A working e-commerce store selling DevOps books, courses, and gear. Built across three services in different languages, wired together with Docker Compose, observable with structured JSON logs, and designed to be broken and fixed.
 
-**What it teaches:** Every tool in a real DevOps pipeline — Docker, networking, volumes, healthchecks, multi-stage builds, Postgres, nginx proxying, structured logging, and a Prometheus-format metrics stub ready for the Observability module.
+**What it teaches:** Every tool in a real DevOps pipeline — Docker, networking, volumes, healthchecks, multi-stage builds, Postgres, Nginx proxying, structured logging, and a Prometheus-format metrics stub ready for the Observability module.
 
 ---
 
 ## Stack
 
-| Service    | Language      | Image              | Port | Job                                       |
-|------------|---------------|--------------------|------|-------------------------------------------|
-| `frontend` | Nginx         | nginx:1.24-alpine  | 80   | Serve the store UI, proxy `/api/*` to API |
-| `api`      | Python 3.12   | python:3.12-slim   | 8080 | Products, orders, health, metrics         |
-| `worker`   | Go 1.22       | alpine:3.19        | —    | Health pinger, structured logs            |
-| `db`       | Postgres 15   | postgres:15-alpine | 5432 | Products (inventory schema), orders schema|
-| `adminer`  | —             | adminer:4          | 8081 | DB browser UI                             |
+| Service    | Language    | Image              | Port | Job                                        |
+|------------|-------------|--------------------|------|--------------------------------------------|
+| `frontend` | Nginx       | nginx:1.24-alpine  | 80   | Serves the store UI, proxies `/api/*` to API |
+| `api`      | Python 3.12 | python:3.12-slim   | 8080 | Products, orders, health, metrics          |
+| `worker`   | Go 1.22     | alpine:3.19        | —    | Health pinger every 10s, structured logs   |
+| `db`       | Postgres 15 | postgres:15-alpine | 5432 | inventory schema + orders schema           |
+| `adminer`  | —           | adminer:4          | 8081 | DB browser UI (dev only)                   |
 
-### Traffic flow
+---
+
+## Traffic Flow
 
 ```
 Browser
   │
   ▼
-frontend :80  (nginx — serves HTML, proxies /api/*)
+frontend :80   (Nginx — serves index.html, proxies /api/* requests)
   │
   ▼
-api :8080  (Python FastAPI — all business logic)
+api :8080      (Python FastAPI — all business logic)
   │
   ▼
-db :5432  (Postgres — inventory.products + orders.orders schemas)
+db :5432       (Postgres — inventory.products + orders.orders)
 
-worker  →  api :8080/api/health  (pings every 10s, writes structured logs)
+worker → api :8080/api/health  (pings every 10s, writes JSON logs)
+adminer :8081                  (visual DB browser, dev only)
 ```
-
-### Why two schemas in one Postgres?
-
-`inventory` and `orders` are logically separate — the API only queries its own schema. When you move to Kubernetes, splitting them into two separate database containers is one config change. The data ownership principle is already in place.
 
 ---
 
-## Quick start
+## Project Structure
+
+```
+shopstack/
+├── docs/
+│   ├── architecture.md   ← full architecture with mental models and ASCII diagram
+│   └── BREAK_IT.md       ← 8 sabotage scenarios with diagnosis commands
+├── db/
+│   └── init.sql          ← seeds inventory + orders schemas, 6 products
+├── infra/
+│   ├── docker-compose.yml
+│   ├── k8s/              ← Kubernetes manifests (filled in Week 2)
+│   └── terraform/        ← Terraform modules (filled in Week 6)
+├── scripts/
+│   ├── setup.sh          ← Docker install for Ubuntu EC2
+│   └── health-check.sh   ← Bash health check script (filled in Week 7)
+└── services/
+    ├── api/
+    │   ├── Dockerfile        ← python:3.12-slim, layer-cache optimised
+    │   ├── requirements.txt  ← fastapi, uvicorn, asyncpg, pydantic
+    │   └── src/
+    │       └── main.py       ← all endpoints, retry loop, structured logs
+    ├── frontend/
+    │   ├── Dockerfile        ← nginx:1.24-alpine
+    │   ├── nginx.conf        ← proxy rules, timeout config, access log
+    │   └── html/
+    │       └── index.html    ← store UI, live health banner, API inspector
+    └── worker/
+        ├── Dockerfile        ← multi-stage Go build, final image ~10MB
+        ├── go.mod
+        └── main.go           ← health pinger, JSON logs, 10s interval
+```
+
+---
+
+## Quick Start — AWS EC2
 
 ```bash
-# 1. Clone the repo
+# 1. Launch EC2 t3.small — Ubuntu 22.04 — on AWS
+# Security group: port 22 (your IP), port 80 (anywhere), port 8080 (anywhere), port 8081 (your IP)
+
+# 2. SSH into the instance
+ssh -i your-key.pem ubuntu@YOUR_EC2_IP
+
+# 3. Install Docker
+bash scripts/setup.sh
+newgrp docker
+
+# 4. Clone the repo
 git clone https://github.com/AkhilTejaDoosari/shopstack.git
-cd shopstack
+cd shopstack/infra
 
-# 2. On a fresh Ubuntu AWS instance, run setup first
-bash setup.sh
-newgrp docker        # reload group permissions — or log out and back in
-
-# 3. Start the stack
+# 5. Start the stack
 docker compose up --build -d
 
-# 4. Verify everything is running
+# 6. Verify
 docker ps
 curl http://localhost/api/health
 
-# 5. Open in your browser
-http://YOUR_EC2_PUBLIC_IP
+# 7. Open in browser
+http://YOUR_EC2_IP
 ```
 
-> **AWS note:** Make sure your EC2 security group allows inbound traffic on ports 80 and 8081.
+---
+
+## Live URLs
+
+| What          | URL                                        |   
+|---------------|--------------------------------------------|
+| Store UI      | http://YOUR_EC2_IP                         |
+| Adminer DB UI | http://YOUR_EC2_IP:8081                    |
+| API health    | http://YOUR_EC2_IP:8080/api/health         |
+| API products  | http://YOUR_EC2_IP:8080/api/products       |
+| API orders    | http://YOUR_EC2_IP:8080/api/orders         |
+| API metrics   | http://YOUR_EC2_IP:8080/api/metrics        |
+
+### Adminer Login
+
+| Field    | Value         |
+|----------|---------------|
+| System   | PostgreSQL    |
+| Server   | db            |
+| Username | shopstack     |
+| Password | shopstack_dev |
+| Database | shopstack     |
 
 ---
 
 ## Endpoints
 
-| Endpoint | Method | Description |
-|---|---|---|
-| `/api/health` | GET | Stack health — db status, uptime, per-dependency status |
-| `/api/products` | GET | All products from Postgres (inventory schema) |
-| `/api/products/:id` | GET | Single product |
-| `/api/orders` | GET | Recent orders joined with product names |
-| `/api/orders/create` | POST | Create an order, decrement stock (atomic transaction) |
-| `/api/stress` | GET | 3s delay + CPU loop — for watching logs and docker stats |
-| `/api/metrics` | GET | Prometheus-format counters — stub for Observability module |
+| Method | Endpoint              | Description                                      |
+|--------|-----------------------|--------------------------------------------------|
+| GET    | `/api/health`         | Stack health — db status, uptime per dependency  |
+| GET    | `/api/products`       | All products from inventory.products             |
+| GET    | `/api/products/:id`   | Single product by ID                             |
+| GET    | `/api/orders`         | Recent orders joined with product names          |
+| POST   | `/api/orders/create`  | Create order, decrement stock — atomic           |
+| GET    | `/api/stress`         | 3s delay + CPU loop — for observability practice |
+| GET    | `/api/metrics`        | Prometheus format counters — Observability stub  |
 
 ---
 
 ## Logs
 
-All services emit structured JSON logs. Same format, same fields — ready for Loki.
+All services emit structured JSON logs. Same format across Python and Go — ready for Loki.
 
 ```bash
-# Follow all services
+# Follow all services live
 docker compose logs -f
 
 # Follow one service
 docker compose logs -f api
 
-# Filter to errors across all services
+# Filter to errors only
 docker compose logs -f | grep '"level":"error"'
 
-# See why a container crashed (logs from before the last restart)
-docker logs --previous shopstack-api-1
+# See why a container crashed before the last restart
+docker logs --previous infra-api-1
 
 # Resource usage — run while hitting /api/stress
 docker stats
 ```
 
-**Example log line:**
+Example log line:
 ```json
-{"ts":"2025-01-01T12:00:00Z","level":"info","service":"api","event":"order_created","order_id":5,"product_id":1,"total":39.99}
+{"ts":"2026-04-19T00:00:00Z","level":"info","service":"api","event":"order_created","order_id":5,"product_id":1,"total":39.99}
 ```
 
 ---
 
-## Break it on purpose
-
-See [`BREAK_IT.md`](./BREAK_IT.md) for 8 documented sabotage scenarios — each with the exact change, what breaks, how to diagnose it, and how to fix it.
-
-Covers: startup race condition, wrong env vars, nginx proxy misconfiguration, Dockerfile layer cache, volume wipe, import error, timeout, port conflict.
-
----
-
-## Project structure
-
-```
-shopstack/
-├── setup.sh              ← Docker install for Ubuntu AWS
-├── docker-compose.yml    ← single command to run everything
-├── init.sql              ← seeds inventory + orders schemas
-├── BREAK_IT.md           ← 8 sabotage scenarios with diagnosis
-│
-├── frontend/
-│   ├── Dockerfile        ← nginx:1.24-alpine, 6 lines
-│   ├── nginx.conf        ← proxy rules + access log + timeout config
-│   └── html/index.html   ← live health UI, product store, order history
-│
-├── api/
-│   ├── Dockerfile        ← python:3.12-slim, 10 lines
-│   ├── requirements.txt  ← fastapi, uvicorn, asyncpg, pydantic
-│   └── main.py           ← all endpoints, retry loop, structured logs
-│
-└── worker/
-    ├── Dockerfile        ← multi-stage Go build, final image ~10MB
-    ├── go.mod
-    └── main.go           ← health pinger, JSON logs, 10s interval
-```
-
----
-
-## Useful commands
+## Useful Commands
 
 ```bash
-# Start
+# Start (from infra/ folder)
+cd infra
 docker compose up --build -d
 
-# Stop (data preserved)
+# Stop — data preserved
 docker compose down
 
-# Stop + wipe database (init.sql re-runs on next up)
+# Stop + wipe database — init.sql reruns on next start
 docker compose down -v
 
 # Rebuild one service
 docker compose up --build api -d
 
+# Check all container status
+docker ps
+
 # Shell inside a container
-docker exec -it shopstack-api-1 bash
-docker exec -it shopstack-db-1  psql -U shopstack -d shopstack
+docker exec -it infra-api-1 bash
+docker exec -it infra-db-1 psql -U shopstack -d shopstack
 
 # Inspect networks
-docker network inspect shopstack_backend
-docker network inspect shopstack_frontend
+docker network inspect infra_backend
+docker network inspect infra_frontend
 
-# Adminer (DB browser UI)
-http://localhost:8081
-# System: PostgreSQL | Server: db | User: shopstack | Password: shopstack_dev | DB: shopstack
+# View all logs
+docker compose logs -f
 ```
+
+---
+
+## Break It on Purpose
+
+See [`docs/BREAK_IT.md`](./docs/BREAK_IT.md) for 8 documented sabotage scenarios.   
+
+Each scenario has the exact change to make, what breaks, the diagnosis commands, and the fix.   
+
+Covers: startup race condition, wrong env vars, nginx proxy misconfiguration, Dockerfile layer cache, volume wipe, Python import error, nginx timeout, port conflict.   
+
+---
+
+## Networks
+
+```
+frontend network → nginx ↔ api
+backend network  → api ↔ db ↔ worker ↔ adminer
+```
+
+The database is not reachable from Nginx directly. The API is the only service that talks to the database.   
+This is intentional isolation — same concept as AWS public and private subnets.   
 
 ---
 
 ## Part of the DevOps Runbook
 
-This stack is the hands-on project for the [devops-runbook](https://github.com/AkhilTejaDoosari/devops-runbook) — a personal reference covering Linux, Git, Networking, Docker, Kubernetes, CI/CD, Observability, AWS, and Terraform.
+This stack is the hands-on project for the [devops-runbook](https://github.com/AkhilTejaDoosari/devops-runbook) — a personal reference covering Linux, Git, Networking, Docker, Kubernetes, CI/CD, Observability, AWS, Terraform, and Ansible.   
 
-ShopStack progresses with each module:
+ShopStack progresses with each module:   
 
-| Module | What changes |
-|---|---|
-| Docker | You are here — stack runs locally on compose |
-| Kubernetes | Same services deployed to Minikube with manifests |
-| CI/CD | GitHub Actions builds and pushes the API image on every commit |
-| Observability | Prometheus scrapes `/api/metrics`, Grafana dashboards, Loki for logs |
-| AWS | Stack deployed to EKS, RDS for the database, ALB for the load balancer |
-| Terraform | All AWS infrastructure defined as code |
+| Module        | What changes                                              |
+|---------------|-----------------------------------------------------------|
+| Docker        | You are here — stack runs on EC2 with Docker Compose      |
+| Kubernetes    | Same services deployed as K8s manifests on AWS            |
+| CI/CD         | GitHub Actions builds and pushes images on every commit   |
+| Observability | Prometheus scrapes `/api/metrics`, Grafana dashboards     |
+| AWS           | EKS cluster, RDS for database, ALB for load balancer      |
+| Terraform     | All AWS infrastructure provisioned as code                |
+| Ansible       | EC2 servers configured automatically with playbooks       |
+
+---
