@@ -1,0 +1,33 @@
+# ShopStack .gitignore
+
+# Never commit these — they contain secrets in real projects
+.env
+.env.*
+*.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+
+# Go
+worker/worker
+
+# Docker build context
+.dockerignore
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

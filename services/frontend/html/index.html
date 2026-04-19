@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ShopStack — DevOps Tooling</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --black: #0a0a0a;
+    --white: #f5f4f0;
+    --gray-1: #1a1a1a;
+    --gray-2: #2a2a2a;
+    --gray-3: #3d3d3d;
+    --gray-4: #6b6b6b;
+    --gray-5: #9b9b9b;
+    --gray-6: #cdcdcd;
+    --accent: #00e5a0;
+    --accent-dim: #00b37d;
+    --warn: #f5a623;
+    --danger: #e8453c;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--black);
+    color: var(--white);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ── Status banner ──────────────────────────────────────────────────── */
+  #status-banner {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: var(--mono);
+    font-size: 13px;
+    border-bottom: 1px solid var(--gray-2);
+    transition: background 0.4s ease;
+    background: var(--gray-1);
+  }
+
+  #status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: var(--gray-3);
+  }
+  #status-dot.ok   { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  #status-dot.warn { background: var(--warn);   box-shadow: 0 0 8px var(--warn); }
+  #status-dot.err  { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+
+  #status-text { flex: 1; color: var(--gray-5); }
+  #status-text span { color: var(--white); }
+  #status-cmd {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent-dim);
+    background: var(--gray-2);
+    padding: 3px 10px;
+    border-radius: 4px;
+    display: none;
+  }
+
+  /* ── Congrats / warning block ───────────────────────────────────────── */
+  #alert-block {
+    margin: 0;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--gray-2);
+    display: none;
+  }
+  #alert-block.show { display: block; }
+
+  #alert-block .alert-title {
+    font-family: var(--mono);
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  #alert-block .alert-body {
+    font-size: 13px;
+    color: var(--gray-5);
+    line-height: 1.7;
+  }
+  #alert-block .alert-cmd {
+    display: inline-block;
+    margin-top: 10px;
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--gray-2);
+    color: var(--accent);
+    padding: 8px 14px;
+    border-radius: 4px;
+    white-space: pre;
+  }
+  #alert-block.state-ok     { background: #001a12; border-bottom-color: var(--accent-dim); }
+  #alert-block.state-warn   { background: #1f1400; border-bottom-color: var(--warn); }
+  #alert-block.state-err    { background: #1a0000; border-bottom-color: var(--danger); }
+
+  /* ── Nav ────────────────────────────────────────────────────────────── */
+  nav {
+    padding: 20px 24px 0;
+    display: flex;
+    align-items: baseline;
+    gap: 24px;
+    border-bottom: 1px solid var(--gray-2);
+    padding-bottom: 16px;
+  }
+  .logo {
+    font-family: var(--mono);
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+  }
+  .logo em { color: var(--accent); font-style: normal; }
+  .nav-links { display: flex; gap: 20px; margin-left: auto; }
+  .nav-links a {
+    font-size: 13px;
+    font-family: var(--mono);
+    color: var(--gray-4);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+  .nav-links a:hover { color: var(--white); }
+
+  /* ── Main layout ────────────────────────────────────────────────────── */
+  main { max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  .page-header { margin-bottom: 40px; }
+  .page-header h1 {
+    font-family: var(--mono);
+    font-size: 32px;
+    font-weight: 600;
+    letter-spacing: -1px;
+    line-height: 1.2;
+  }
+  .page-header p {
+    margin-top: 8px;
+    font-size: 14px;
+    color: var(--gray-4);
+  }
+
+  /* ── Filter tabs ────────────────────────────────────────────────────── */
+  .filters {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+  }
+  .filter-btn {
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 6px 14px;
+    background: transparent;
+    color: var(--gray-4);
+    border: 1px solid var(--gray-3);
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .filter-btn:hover { border-color: var(--gray-5); color: var(--white); }
+  .filter-btn.active { background: var(--white); color: var(--black); border-color: var(--white); }
+
+  /* ── Product grid ───────────────────────────────────────────────────── */
+  #product-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1px;
+    background: var(--gray-2);
+    border: 1px solid var(--gray-2);
+  }
+
+  .product-card {
+    background: var(--black);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: background 0.15s;
+    position: relative;
+  }
+  .product-card:hover { background: var(--gray-1); }
+
+  .product-cat {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .product-cat.book  { color: var(--accent); }
+  .product-cat.course { color: var(--warn); }
+  .product-cat.gear  { color: #7eb8f7; }
+
+  .product-name {
+    font-family: var(--sans);
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 1.4;
+    color: var(--white);
+  }
+
+  .product-desc {
+    font-size: 13px;
+    color: var(--gray-4);
+    line-height: 1.6;
+    flex: 1;
+  }
+
+  .product-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 8px;
+    padding-top: 14px;
+    border-top: 1px solid var(--gray-2);
+  }
+
+  .product-price {
+    font-family: var(--mono);
+    font-size: 18px;
+    font-weight: 600;
+  }
+
+  .product-stock {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--gray-5);
+  }
+  .product-stock.low { color: var(--warn); }
+
+  .buy-btn {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 8px 18px;
+    background: transparent;
+    color: var(--white);
+    border: 1px solid var(--gray-3);
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .buy-btn:hover:not(:disabled) {
+    background: var(--white);
+    color: var(--black);
+    border-color: var(--white);
+  }
+  .buy-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+  .buy-btn.loading { color: var(--accent); border-color: var(--accent); }
+  .buy-btn.success { color: var(--accent); border-color: var(--accent); background: #001a12; }
+
+  /* ── Orders panel ───────────────────────────────────────────────────── */
+  #orders-section { margin-top: 56px; }
+  #orders-section h2 {
+    font-family: var(--mono);
+    font-size: 16px;
+    font-weight: 500;
+    margin-bottom: 16px;
+    color: var(--gray-5);
+    letter-spacing: 0.04em;
+  }
+
+  #orders-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background: var(--gray-2);
+    border: 1px solid var(--gray-2);
+  }
+
+  .order-row {
+    background: var(--black);
+    padding: 14px 20px;
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    gap: 20px;
+    align-items: center;
+    font-size: 13px;
+  }
+  .order-row:hover { background: var(--gray-1); }
+  .order-name { color: var(--white); }
+  .order-qty  { font-family: var(--mono); color: var(--gray-5); font-size: 12px; }
+  .order-total{ font-family: var(--mono); color: var(--accent); font-size: 13px; }
+  .order-status {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    background: #001a12;
+    padding: 3px 8px;
+    border-radius: 2px;
+  }
+
+  /* ── API inspector panel ────────────────────────────────────────────── */
+  #api-section { margin-top: 56px; }
+  #api-section h2 {
+    font-family: var(--mono);
+    font-size: 16px;
+    font-weight: 500;
+    margin-bottom: 16px;
+    color: var(--gray-5);
+    letter-spacing: 0.04em;
+  }
+
+  .api-endpoints {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1px;
+    background: var(--gray-2);
+    border: 1px solid var(--gray-2);
+    margin-bottom: 20px;
+  }
+
+  .endpoint-card {
+    background: var(--black);
+    padding: 18px 20px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .endpoint-card:hover { background: var(--gray-1); }
+
+  .endpoint-method {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    margin-bottom: 4px;
+  }
+  .endpoint-method.get  { color: var(--accent); }
+  .endpoint-method.post { color: var(--warn); }
+
+  .endpoint-path {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--white);
+    margin-bottom: 4px;
+  }
+  .endpoint-desc { font-size: 12px; color: var(--gray-5); }
+
+  #api-output {
+    background: var(--gray-1);
+    border: 1px solid var(--gray-2);
+    padding: 20px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent);
+    white-space: pre;
+    overflow-x: auto;
+    min-height: 80px;
+    line-height: 1.7;
+  }
+
+  /* ── Loading / empty states ─────────────────────────────────────────── */
+  .loading-msg {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--gray-5);
+    padding: 40px;
+    text-align: center;
+  }
+
+  .error-msg {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--danger);
+    padding: 40px;
+    text-align: center;
+  }
+
+  /* ── Footer ─────────────────────────────────────────────────────────── */
+  footer {
+    border-top: 1px solid var(--gray-2);
+    padding: 20px 24px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--gray-4);
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  footer span { color: var(--gray-3); }
+</style>
+</head>
+<body>
+
+<!-- ── Status banner ─────────────────────────────────────────────────────── -->
+<div id="status-banner">
+  <div id="status-dot"></div>
+  <div id="status-text">checking stack health...</div>
+  <div id="status-cmd"></div>
+</div>
+
+<!-- ── Alert / congrats block ────────────────────────────────────────────── -->
+<div id="alert-block">
+  <div class="alert-title" id="alert-title"></div>
+  <div class="alert-body" id="alert-body"></div>
+  <div class="alert-cmd" id="alert-cmd" style="display:none"></div>
+</div>
+
+<!-- ── Nav ───────────────────────────────────────────────────────────────── -->
+<nav>
+  <div class="logo">Shop<em>Stack</em></div>
+  <div class="nav-links">
+    <a href="#products">Products</a>
+    <a href="#orders-section">Orders</a>
+    <a href="#api-section">API Inspector</a>
+    <a href="/api/metrics" target="_blank">/metrics</a>
+  </div>
+</nav>
+
+<!-- ── Main ──────────────────────────────────────────────────────────────── -->
+<main>
+
+  <div class="page-header">
+    <h1>DevOps Tooling</h1>
+    <p>Books, courses, and gear for engineers who build and run systems.</p>
+  </div>
+
+  <div class="filters" id="filters">
+    <button class="filter-btn active" data-cat="all">All</button>
+    <button class="filter-btn" data-cat="book">Books</button>
+    <button class="filter-btn" data-cat="course">Courses</button>
+    <button class="filter-btn" data-cat="gear">Gear</button>
+  </div>
+
+  <div id="product-grid">
+    <div class="loading-msg">fetching products from /api/products...</div>
+  </div>
+
+  <!-- ── Orders ──────────────────────────────────────────────────────────── -->
+  <div id="orders-section">
+    <h2>// recent orders</h2>
+    <div id="orders-list">
+      <div class="loading-msg">fetching orders from /api/orders...</div>
+    </div>
+  </div>
+
+  <!-- ── API Inspector ───────────────────────────────────────────────────── -->
+  <div id="api-section">
+    <h2>// api inspector — click any endpoint</h2>
+    <div class="api-endpoints">
+      <div class="endpoint-card" onclick="callAPI('GET', '/api/health')">
+        <div class="endpoint-method get">GET</div>
+        <div class="endpoint-path">/api/health</div>
+        <div class="endpoint-desc">Stack health — db status, uptime</div>
+      </div>
+      <div class="endpoint-card" onclick="callAPI('GET', '/api/products')">
+        <div class="endpoint-method get">GET</div>
+        <div class="endpoint-path">/api/products</div>
+        <div class="endpoint-desc">All products from Postgres</div>
+      </div>
+      <div class="endpoint-card" onclick="callAPI('GET', '/api/orders')">
+        <div class="endpoint-method get">GET</div>
+        <div class="endpoint-path">/api/orders</div>
+        <div class="endpoint-desc">Recent orders with product names</div>
+      </div>
+      <div class="endpoint-card" onclick="callAPI('GET', '/api/metrics')">
+        <div class="endpoint-method get">GET</div>
+        <div class="endpoint-path">/api/metrics</div>
+        <div class="endpoint-desc">Prometheus format counters</div>
+      </div>
+      <div class="endpoint-card" onclick="callAPI('GET', '/api/stress')">
+        <div class="endpoint-method get">GET</div>
+        <div class="endpoint-path">/api/stress</div>
+        <div class="endpoint-desc">3s delay + CPU loop. Watch docker stats.</div>
+      </div>
+    </div>
+    <div id="api-output">// click an endpoint above to see the raw response</div>
+  </div>
+
+</main>
+
+<footer>
+  <span>ShopStack</span> · frontend: nginx 1.24 · api: python fastapi · worker: go · db: postgres 15
+  <span style="margin-left:auto">health check every 3s</span>
+</footer>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let allProducts = [];
+let activeFilter = 'all';
+let lastHealthState = null;
+
+// ── Health polling ──────────────────────────────────────────────────────────
+async function checkHealth() {
+  const dot    = document.getElementById('status-dot');
+  const text   = document.getElementById('status-text');
+  const cmd    = document.getElementById('status-cmd');
+  const block  = document.getElementById('alert-block');
+  const title  = document.getElementById('alert-title');
+  const body   = document.getElementById('alert-body');
+  const cmdbox = document.getElementById('alert-cmd');
+
+  // 2-second timeout — if API doesn't respond, we know fast
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 2000);
+
+  try {
+    const res = await fetch('/api/health', { signal: controller.signal });
+    clearTimeout(timeout);
+    const data = await res.json();
+    const dbOk = data.dependencies?.postgres?.status === 'ok';
+    const apiOk = data.status === 'ok';
+
+    if (apiOk && dbOk) {
+      // ── All green ────────────────────────────────────────────────────────
+      dot.className = 'ok';
+      text.innerHTML = '<span>api ✓</span> &nbsp; <span>postgres ✓</span> &nbsp; uptime: ' + data.uptime_seconds + 's';
+      cmd.style.display = 'none';
+
+      if (lastHealthState !== 'ok') {
+        block.className = 'show state-ok';
+        title.textContent = '🎉 CONGRATS — stack is fully alive.';
+        body.innerHTML = 'Frontend, API, and Postgres are all running.<br>You built a polyglot microservice stack. That is on your resume now.';
+        cmdbox.style.display = 'none';
+        lastHealthState = 'ok';
+      }
+
+    } else if (!dbOk) {
+      // ── DB down ──────────────────────────────────────────────────────────
+      dot.className = 'err';
+      text.innerHTML = '<span>api ✓</span> &nbsp; <span style="color:var(--danger)">postgres ✗</span>';
+      cmd.textContent = 'docker compose logs db';
+      cmd.style.display = 'inline';
+
+      if (lastHealthState !== 'db') {
+        block.className = 'show state-err';
+        title.textContent = '🔵 So close — API is up, database is cold.';
+        body.innerHTML = 'The API started but cannot reach Postgres.<br>This is one of the most common production issues — service up, dependency down.';
+        cmdbox.textContent = '$ docker compose logs db\n$ docker ps\n# Is the db container running? Is DB_HOST set correctly?';
+        cmdbox.style.display = 'block';
+        lastHealthState = 'db';
+      }
+    }
+
+  } catch (err) {
+    clearTimeout(timeout);
+    // ── API down ─────────────────────────────────────────────────────────
+    dot.className = 'err';
+    text.innerHTML = '<span style="color:var(--danger)">api ✗</span> &nbsp; frontend is running';
+    cmd.textContent = 'docker logs shopstack-api-1';
+    cmd.style.display = 'inline';
+
+    if (lastHealthState !== 'api-down') {
+      block.className = 'show state-err';
+      title.textContent = '🔴 Frontend is up. API is not responding.';
+      body.innerHTML = 'The nginx container is alive — that\'s how you\'re reading this.<br>The Python API is not responding. Start here:';
+      cmdbox.textContent = '$ docker logs shopstack-api-1\n$ docker ps\n# Is the container running? Did it crash on startup?';
+      cmdbox.style.display = 'block';
+      lastHealthState = 'api-down';
+    }
+  }
+}
+
+// ── Products ────────────────────────────────────────────────────────────────
+async function loadProducts() {
+  const grid = document.getElementById('product-grid');
+  try {
+    const res = await fetch('/api/products');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    allProducts = await res.json();
+    renderProducts();
+  } catch (err) {
+    grid.innerHTML = '<div class="error-msg">Could not load products.<br>Check: docker logs shopstack-api-1</div>';
+  }
+}
+
+function renderProducts() {
+  const grid = document.getElementById('product-grid');
+  const filtered = activeFilter === 'all'
+    ? allProducts
+    : allProducts.filter(p => p.category === activeFilter);
+
+  if (filtered.length === 0) {
+    grid.innerHTML = '<div class="loading-msg">no products found</div>';
+    return;
+  }
+
+  grid.innerHTML = filtered.map(p => {
+    const stockLabel = p.stock < 10
+      ? `<span class="product-stock low">only ${p.stock} left</span>`
+      : `<span class="product-stock">${p.stock} in stock</span>`;
+    const price = parseFloat(p.price).toFixed(2);
+    return `
+    <div class="product-card" data-id="${p.id}">
+      <div class="product-cat ${p.category}">${p.category}</div>
+      <div class="product-name">${p.name}</div>
+      <div class="product-desc">${p.description}</div>
+      <div class="product-footer">
+        <div>
+          <div class="product-price">$${price}</div>
+          ${stockLabel}
+        </div>
+        <button class="buy-btn" id="buy-${p.id}" onclick="buyProduct(${p.id}, this)" ${p.stock === 0 ? 'disabled' : ''}>
+          ${p.stock === 0 ? 'sold out' : 'buy →'}
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Buy ─────────────────────────────────────────────────────────────────────
+async function buyProduct(productId, btn) {
+  btn.disabled = true;
+  btn.textContent = '...';
+  btn.className = 'buy-btn loading';
+
+  try {
+    const res = await fetch('/api/orders/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ product_id: productId, quantity: 1 }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Order failed');
+    }
+    btn.textContent = 'ordered ✓';
+    btn.className = 'buy-btn success';
+    // Reload products (stock decremented) and orders
+    setTimeout(() => { loadProducts(); loadOrders(); }, 600);
+  } catch (err) {
+    btn.textContent = err.message;
+    btn.className = 'buy-btn';
+    btn.disabled = false;
+  }
+}
+
+// ── Orders ──────────────────────────────────────────────────────────────────
+async function loadOrders() {
+  const list = document.getElementById('orders-list');
+  try {
+    const res = await fetch('/api/orders');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const orders = await res.json();
+
+    if (orders.length === 0) {
+      list.innerHTML = '<div class="loading-msg">no orders yet — buy something</div>';
+      return;
+    }
+
+    list.innerHTML = orders.map(o => {
+      const date = new Date(o.created_at).toLocaleTimeString();
+      return `
+      <div class="order-row">
+        <div class="order-name">${o.product_name}</div>
+        <div class="order-qty">qty: ${o.quantity}</div>
+        <div class="order-total">$${parseFloat(o.total).toFixed(2)}</div>
+        <div class="order-status">${o.status}</div>
+      </div>`;
+    }).join('');
+  } catch (err) {
+    list.innerHTML = '<div class="error-msg">Could not load orders.</div>';
+  }
+}
+
+// ── API Inspector ────────────────────────────────────────────────────────────
+async function callAPI(method, path) {
+  const output = document.getElementById('api-output');
+  output.textContent = `// ${method} ${path}\n// fetching...`;
+  try {
+    const res = await fetch(path);
+    const contentType = res.headers.get('content-type') || '';
+    let body;
+    if (contentType.includes('application/json')) {
+      body = JSON.stringify(await res.json(), null, 2);
+    } else {
+      body = await res.text();
+    }
+    output.textContent = `// ${method} ${path}  →  HTTP ${res.status}\n\n${body}`;
+  } catch (err) {
+    output.textContent = `// ${method} ${path}  →  ERROR\n\n${err.message}`;
+  }
+}
+
+// ── Filter buttons ───────────────────────────────────────────────────────────
+document.getElementById('filters').addEventListener('click', e => {
+  if (!e.target.classList.contains('filter-btn')) return;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  e.target.classList.add('active');
+  activeFilter = e.target.dataset.cat;
+  renderProducts();
+});
+
+// ── Boot ─────────────────────────────────────────────────────────────────────
+checkHealth();
+loadProducts();
+loadOrders();
+setInterval(checkHealth, 3000);
+setInterval(loadOrders, 10000);
+</script>
+</body>
+</html>
