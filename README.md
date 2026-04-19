@@ -176,7 +176,7 @@ http://localhost:8081
 
 ## Part of the DevOps Runbook
 
-This stack is the hands-on project for the [devops-runbook](https://github.com/YOUR_USERNAME/devops-runbook) — a personal reference covering Linux, Git, Networking, Docker, Kubernetes, CI/CD, Observability, AWS, and Terraform.
+This stack is the hands-on project for the [devops-runbook](https://github.com/AkhilTejaDoosari/devops-runbook) — a personal reference covering Linux, Git, Networking, Docker, Kubernetes, CI/CD, Observability, AWS, and Terraform.
 
 ShopStack progresses with each module:
 
