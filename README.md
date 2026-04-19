@@ -45,7 +45,7 @@ worker  →  api :8080/api/health  (pings every 10s, writes structured logs)
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/YOUR_USERNAME/shopstack
+git clone https://github.com/AkhilTejaDoosari/shopstack.git
 cd shopstack
 
 # 2. On a fresh Ubuntu AWS instance, run setup first
