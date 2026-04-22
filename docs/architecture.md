@@ -1,30 +1,94 @@
 # ShopStack — Architecture
 
-ShopStack is a 3-tier polyglot containerised application.   
-Three tiers: Presentation → Application → Data.       
-Five containers. Each one has one job. None overlap.      
+ShopStack is a 3-tier polyglot containerised application.
+Three tiers: Presentation → Application → Data.
+Five containers. Each one has one job. None overlap.
 
-As a DevOps engineer you need to know how to run, connect, monitor, and debug each service.   
-You do not need to know how to write the code inside them.   
+As a DevOps engineer you need to know how to run, connect, monitor, and debug each service.
+You do not need to know how to write the code inside them.
+
+---
+
+## 🧠 Store This In Your Brain — Your Future Self Will Thank You
+
+> Every command, every test, every debug scenario uses these names and ports.
+> The faster you recall this table, the faster you move.
+> This is the spec. Everything else in this file explains why.
+
+### Get EC2 IP — run this every time EC2 restarts
+```bash
+curl -s http://169.254.169.254/latest/meta-data/public-ipv4
+```
+
+### Services
+| Service  | Container Name   | Built On | External Port | Internal Port | Network       |
+|----------|------------------|----------|---------------|---------------|---------------|
+| frontend | infra-frontend-1 | Nginx    | 80            | 80            | web           |
+| api      | infra-api-1      | Python   | 8080          | 8080          | web + backend |
+| worker   | infra-worker-1   | Go       | none          | none          | backend       |
+| db       | infra-db-1       | Postgres | none          | 5432          | backend       |
+| adminer  | infra-adminer-1  | Adminer  | 8081          | 8080          | backend       |
+
+### Networks
+| Network | Who is on it             | Purpose                 |
+|---------|--------------------------|-------------------------|
+| web     | frontend, api            | UI talks to API         |
+| backend | api, db, worker, adminer | API talks to data layer |
+
+### Volume
+| Volume  | What it stores    | Without it                     |
+|---------|-------------------|--------------------------------|
+| db-data | All postgres data | Data wiped on container delete |
+
+### Compose Commands
+| What                    | Command                                        |
+|-------------------------|------------------------------------------------|
+| Start stack             | `cd ~/shopstack/infra && docker compose up -d` |
+| Stop stack — keep data  | `docker compose down`                          |
+| Stop stack — wipe data  | `docker compose down -v`                       |
+| Check all services      | `docker compose ps`                            |
+| Follow all logs         | `docker compose logs -f`                       |
+| Follow one service logs | `docker compose logs -f api`                   |
+| Rebuild and restart     | `docker compose up --build -d`                 |
+
+### Live URLs — replace YOUR_EC2_IP each session
+| What         | URL                                    |
+|--------------|----------------------------------------|
+| Store UI     | `http://YOUR_EC2_IP`                   |
+| Adminer      | `http://YOUR_EC2_IP:8081`              |
+| API health   | `http://YOUR_EC2_IP:8080/api/health`   |
+| API products | `http://YOUR_EC2_IP:8080/api/products` |
+| API orders   | `http://YOUR_EC2_IP:8080/api/orders`   |
+| API metrics  | `http://YOUR_EC2_IP:8080/api/metrics`  |
+| API stress   | `http://YOUR_EC2_IP:8080/api/stress`   |
+
+### Adminer Login
+| Field    | Value         |
+|----------|---------------|
+| System   | PostgreSQL    |
+| Server   | db            |
+| Username | shopstack     |
+| Password | shopstack_dev |
+| Database | shopstack     |
 
 ---
 
 ## The Three Tiers
 
-**Tier 1 — Presentation (what the user sees)**   
-Nginx serves the HTML, CSS, and JavaScript to the browser.   
-It also proxies every /api/* request to the Python API.   
-Nginx does not know what a product is. It just delivers files and forwards requests.   
+**Tier 1 — Presentation (what the user sees)**
+Nginx serves the HTML, CSS, and JavaScript to the browser.
+It also proxies every /api/* request to the Python API.
+Nginx does not know what a product is. It just delivers files and forwards requests.
 
-**Tier 2 — Application (the brain)**   
-Python FastAPI handles all business logic.   
-It decides what happens when you buy a product — check stock, write the order, decrement stock.   
-It talks to the database. It never stores anything itself.   
+**Tier 2 — Application (the brain)**
+Python FastAPI handles all business logic.
+It decides what happens when you buy a product — check stock, write the order, decrement stock.
+It talks to the database. It never stores anything itself.
 
-**Tier 3 — Data (the memory)**   
-Postgres stores everything permanently.   
-Products, stock levels, orders, totals.   
-It has no logic. It just saves and retrieves rows when the API asks.   
+**Tier 3 — Data (the memory)**
+Postgres stores everything permanently.
+Products, stock levels, orders, totals.
+It has no logic. It just saves and retrieves rows when the API asks.
 
 ---
 
@@ -50,11 +114,13 @@ Adminer :8081    ← visual database browser (dev only)
   └──► Postgres     lets you see tables and run SQL queries
 ```
 
+---
+
 ## What is Nginx and What is Proxying
 
 Nginx is a web server. Think of it as a traffic cop at the front door.
 
-When you open http://18.219.143.12 in your browser:
+When you open http://YOUR_EC2_IP in your browser:
 ```
 Browser asks:  "give me the webpage"
 Nginx answers: "here is index.html"
@@ -152,20 +218,20 @@ that lives separately from EC2 and survives instance termination.
 
 ## Networks
 
-Two Docker networks. Intentional isolation.   
+Two Docker networks. Intentional isolation.
 
 ```
-web network → nginx ↔ api
-backend network  → api ↔ db ↔ worker ↔ adminer
+web network     → frontend ↔ api
+backend network → api ↔ db ↔ worker ↔ adminer
 ```
 
-Nginx cannot reach the database directly.      
-It can only talk to the API.   
-The API is the only service allowed to talk to the database.   
+Nginx cannot reach the database directly.
+It can only talk to the API.
+The API is the only service allowed to talk to the database.
 
-This is the same logic as AWS public and private subnets.   
-Public subnet  → can reach the internet.   
-Private subnet → only reachable from inside the VPC.   
+This is the same logic as AWS public and private subnets.
+Public subnet  → can reach the internet.
+Private subnet → only reachable from inside the VPC.
 
 ---
 
@@ -175,17 +241,17 @@ Private subnet → only reachable from inside the VPC.
 db-data → named volume → persists Postgres data across container restarts
 ```
 
-Without the volume: delete the container, lose all data.   
-With the volume: delete the container, data survives. Postgres reconnects on restart.   
+Without the volume: delete the container, lose all data.
+With the volume: delete the container, data survives. Postgres reconnects on restart.
 
-docker compose down    → volume survives. Data is safe.   
-docker compose down -v → volume deleted. Data gone. init.sql reruns on next start.     
+docker compose down    → volume survives. Data is safe.
+docker compose down -v → volume deleted. Data gone. init.sql reruns on next start.
 
 ---
 
 ## Database Schemas
 
-A schema is a namespace. A folder inside the database that groups related tables.   
+A schema is a namespace. A folder inside the database that groups related tables.
 
 Without schemas everything is in one pile:
 ```
@@ -200,21 +266,21 @@ inventory.products  ← belongs to inventory domain
 orders.orders       ← belongs to orders domain
 ```
 
-Why two schemas in ShopStack:   
-Each schema represents one microservice domain.    
-The products logic only touches inventory.      
-The orders logic only touches orders. They never cross.      
+Why two schemas in ShopStack:
+Each schema represents one microservice domain.
+The products logic only touches inventory.
+The orders logic only touches orders. They never cross.
 
-This is the microservice data ownership principle.   
-When you split into two separate services in Kubernetes you just point each service at its own schema.       
-One line change. The thinking is already right.      
+This is the microservice data ownership principle.
+When you split into two separate services in Kubernetes you just point each service at its own schema.
+One line change. The thinking is already right.
 
 ---
 
 ## Endpoints
 
-An endpoint is a URL your API listens on. A door into the application.   
-Every door has an address (the path) and a method (what you are doing).   
+An endpoint is a URL your API listens on. A door into the application.
+Every door has an address (the path) and a method (what you are doing).
 
 **GET — you are asking for information. Nothing changes.**
 **POST — you are sending something to create or change. Something is written.**
@@ -232,39 +298,15 @@ POST /api/orders/create → 500   someone tried to buy, it failed
 
 You know instantly what happened and where to look.
 
-| Method | Endpoint             | What it does                                     |
-|--------|----------------------|--------------------------------------------------|
-| GET    | /api/health          | Stack health — db status, uptime per dependency  |
-| GET    | /api/products        | All products from inventory.products             |
-| GET    | /api/products/:id    | Single product by ID                             |
-| GET    | /api/orders          | Recent orders joined with product names          |
-| POST   | /api/orders/create   | Create order, decrement stock — atomic           |
-| GET    | /api/stress          | 3s delay + CPU loop — for observability practice |
-| GET    | /api/metrics         | Prometheus format counters — Observability stub  |
-
----
-
-## Live URLs
-
-| What          | URL                                          |
-|---------------|----------------------------------------------|
-| Store UI      | http://18.219.143.12                         |
-| Adminer DB UI | http://18.219.143.12:8081                    |
-| API health    | http://18.219.143.12:8080/api/health         |
-| API products  | http://18.219.143.12:8080/api/products       |
-| API orders    | http://18.219.143.12:8080/api/orders         |
-| API metrics   | http://18.219.143.12:8080/api/metrics        |
-| API stress    | http://18.219.143.12:8080/api/stress         |
-
-## Adminer Login
-
-| Field    | Value         |
-|----------|---------------|
-| System   | PostgreSQL    |
-| Server   | db            |
-| Username | shopstack     |
-| Password | shopstack_dev |
-| Database | shopstack     |
+| Method | Endpoint           | What it does                                     |
+|--------|--------------------|--------------------------------------------------|
+| GET    | /api/health        | Stack health — db status, uptime per dependency  |
+| GET    | /api/products      | All products from inventory.products             |
+| GET    | /api/products/:id  | Single product by ID                             |
+| GET    | /api/orders        | Recent orders joined with product names          |
+| POST   | /api/orders/create | Create order, decrement stock — atomic           |
+| GET    | /api/stress        | 3s delay + CPU loop — for observability practice |
+| GET    | /api/metrics       | Prometheus format counters — Observability stub  |
 
 ---
 
@@ -273,29 +315,29 @@ You know instantly what happened and where to look.
 This stack runs on EC2 with Docker Compose.
 Each module takes it further.
 
-| Module        | What changes                                       |
-|---------------|----------------------------------------------------|
-| Kubernetes    | Same services deployed as K8s manifests on AWS     |
-| CI/CD         | GitHub Actions builds and pushes images on commit  |
-| Observability | Prometheus scrapes /api/metrics, Grafana shows it  |
-| AWS           | EKS cluster, RDS database, ALB load balancer       |
-| Terraform     | All AWS infrastructure defined as code             |
-| Ansible       | EC2 servers configured automatically               |
+| Module        | What changes                                      |
+|---------------|---------------------------------------------------|
+| Kubernetes    | Same services deployed as K8s manifests on AWS    |
+| CI/CD         | GitHub Actions builds and pushes images on commit |
+| Observability | Prometheus scrapes /api/metrics, Grafana shows it |
+| AWS           | EKS cluster, RDS database, ALB load balancer      |
+| Terraform     | All AWS infrastructure defined as code            |
+| Ansible       | EC2 servers configured automatically              |
 
----   
+---
 
 ## Architecture Diagram
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────┐
 │                         AWS EC2 t3.small                                   │
-│                         18.219.143.12                                      │
+│                         YOUR_EC2_IP                                        │
 │                                                                            │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
 │  │                        Docker Engine                                │   │
 │  │                                                                     │   │
 │  │   ┌──────────────────────────────────────────────────────────────┐  │   │
-│  │   │                   web network                           │  │   │
+│  │   │                      web network                             │  │   │
 │  │   │                                                              │  │   │
 │  │   │   ┌──────────────────┐         ┌─────────────────────────┐   │  │   │
 │  │   │   │   NGINX          │         │   PYTHON FASTAPI        │   │  │   │
@@ -304,7 +346,7 @@ Each module takes it further.
 │  │   │   │  serves          │         │  /api/health            │   │  │   │
 │  │   │   │  index.html      │         │  /api/products          │   │  │   │
 │  │   │   │                  │         │  /api/orders            │   │  │   │
-│  │   │   │  proxies /api/*  │         │  /api/orders/creat      │   │  │   │
+│  │   │   │  proxies /api/*  │         │  /api/orders/create     │   │  │   │
 │  │   │   │  → to api        │         │  /api/metrics           │   │  │   │
 │  │   │   │                  │         │  /api/stress            │   │  │   │
 │  │   │   │  PORT: 80        │         │                         │   │  │   │
@@ -389,18 +431,17 @@ Each module takes it further.
              └─────────────┘               └──────────────┘
 
 
-REQUEST FLOW — buying a product   
+REQUEST FLOW — buying a product
 ────────────────────────────────
-1. Browser opens http://18.219.143.12
-2. Nginx serves index.html + CSS + JS
-3. JS runs in browser, calls GET /api/products
-4. Nginx proxies → Python API :8080
-5. Python queries → SELECT * FROM inventory.products
-6. Postgres returns 6 rows
-7. Python returns JSON to Nginx
-8. Nginx returns JSON to browser
-9. JS renders product cards
-
+1.  Browser opens http://YOUR_EC2_IP
+2.  Nginx serves index.html + CSS + JS
+3.  JS runs in browser, calls GET /api/products
+4.  Nginx proxies → Python API :8080
+5.  Python queries → SELECT * FROM inventory.products
+6.  Postgres returns 6 rows
+7.  Python returns JSON to Nginx
+8.  Nginx returns JSON to browser
+9.  JS renders product cards
 10. User clicks buy →
 11. JS calls POST /api/orders/create
 12. Nginx proxies → Python API :8080
