@@ -195,7 +195,7 @@ docker exec -it infra-db-1 psql -U shopstack -d shopstack
 
 # Inspect networks
 docker network inspect infra_backend
-docker network inspect infra_frontend
+docker network inspect infra_web
 
 # View all logs
 docker compose logs -f
@@ -216,7 +216,7 @@ Covers: startup race condition, wrong env vars, nginx proxy misconfiguration, Do
 ## Networks
 
 ```
-frontend network → nginx ↔ api
+web network → nginx ↔ api
 backend network  → api ↔ db ↔ worker ↔ adminer
 ```
 

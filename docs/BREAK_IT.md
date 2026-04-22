@@ -146,7 +146,7 @@ docker compose up --build -d
 ```bash
 docker compose logs frontend           # nginx logs the 502
 curl -v http://localhost/api/health   # You'll see the 502 in the response
-docker network inspect shopstack_frontend  # What services are on this network?
+docker network inspect shopstack_web  # What services are on this network?
 ```
 
 **Fix:** Restore `proxy_pass http://api:8080;` in nginx.conf.
@@ -339,7 +339,7 @@ docker stats
 # See what networks each container is on
 docker network ls
 docker network inspect shopstack_backend
-docker network inspect shopstack_frontend
+docker network inspect shopstack_web
 
 # Run a shell inside a container to debug from inside
 docker exec -it shopstack-api-1 bash

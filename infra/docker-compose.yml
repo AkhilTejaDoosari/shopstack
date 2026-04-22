@@ -40,7 +40,7 @@ services:
     restart: unless-stopped
     networks:
       - backend
-      - frontend
+      - web
 
   worker:
     build: ../services/worker
@@ -67,7 +67,7 @@ services:
       retries: 3
     restart: unless-stopped
     networks:
-      - frontend
+      - web
 
   adminer:
     image: adminer:4
@@ -80,7 +80,7 @@ services:
       - backend
 
 networks:
-  frontend:
+  web:
   backend:
 
 volumes:

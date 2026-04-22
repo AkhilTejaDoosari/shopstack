@@ -155,7 +155,7 @@ that lives separately from EC2 and survives instance termination.
 Two Docker networks. Intentional isolation.   
 
 ```
-frontend network → nginx ↔ api
+web network → nginx ↔ api
 backend network  → api ↔ db ↔ worker ↔ adminer
 ```
 
@@ -295,7 +295,7 @@ Each module takes it further.
 │  │                        Docker Engine                                │   │
 │  │                                                                     │   │
 │  │   ┌──────────────────────────────────────────────────────────────┐  │   │
-│  │   │                   frontend network                           │  │   │
+│  │   │                   web network                           │  │   │
 │  │   │                                                              │  │   │
 │  │   │   ┌──────────────────┐         ┌─────────────────────────┐   │  │   │
 │  │   │   │   NGINX          │         │   PYTHON FASTAPI        │   │  │   │
