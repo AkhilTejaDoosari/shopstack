@@ -140,7 +140,7 @@ docker compose up --build -d
 
 **What you'll see:** The page loads (nginx is running) but the status banner shows API is down, and all API calls return `502 Bad Gateway`.
 
-**Why:** `api` resolves via Docker DNS on the frontend network. `apiservice` doesn't exist. nginx can't connect upstream.
+**Why:** `api` resolves via Docker DNS on the web network. `apiservice` doesn't exist. nginx can't connect upstream.
 
 **Diagnose:**
 ```bash
